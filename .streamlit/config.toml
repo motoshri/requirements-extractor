@@ -1,0 +1,8 @@
+[server]
+# Setting to 1GB (1073741824 bytes) - within Streamlit's allowed range
+maxUploadSize = 1073741824
+maxMessageSize = 1073741824
+
+[browser]
+gatherUsageStats = false
+
