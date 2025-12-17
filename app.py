@@ -2357,10 +2357,18 @@ def main():
             
             # Check if admin bypass is active (from session state)
             if st.session_state.get('subscription_active'):
+                tier = st.session_state.get('subscription_tier', 'enterprise')
                 subscription = {
-                    'tier': st.session_state.get('subscription_tier', 'enterprise'),
+                    'tier': tier,
                     'status': 'active',
-                    'admin_bypass': True
+                    'admin_bypass': True,
+                    'tier_info': {
+                        'name': tier.title(),
+                        'price': 0,
+                        'max_extractions_per_month': -1,  # Unlimited
+                        'max_file_size_mb': -1,  # Unlimited
+                        'features': ['All features', 'Admin access', 'Unlimited usage']
+                    }
                 }
             
             # Check if user needs to subscribe
