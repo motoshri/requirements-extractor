@@ -2355,6 +2355,14 @@ def main():
             # Get user subscription
             subscription = subscription_manager.get_user_subscription(user_id)
             
+            # Check if admin bypass is active (from session state)
+            if st.session_state.get('subscription_active'):
+                subscription = {
+                    'tier': st.session_state.get('subscription_tier', 'enterprise'),
+                    'status': 'active',
+                    'admin_bypass': True
+                }
+            
             # Check if user needs to subscribe
             if not subscription:
                 # Show subscription page (user is signed in)
