@@ -1602,18 +1602,55 @@ def transcribe_audio_with_whisper(audio_path: str, api_key: str = None, use_loca
                             detailed_msg += f"\n\nRaw API Response (first 500 chars):\n{raw_response}"
                         raise Exception(detailed_msg)
         else:
-            # File is too large, need to chunk it
+            # File is too large, need to compress or chunk it
             if not PYDUB_AVAILABLE:
-                # Try to process anyway without chunking (may fail for very large files)
+                # Try to compress using ffmpeg first
                 if progress_callback:
-                    progress_callback(0.2, "⚠️ Large file - attempting direct processing (pydub not available)...")
-                with open(audio_path, 'rb') as audio_file:
-                    transcript = client.audio.transcriptions.create(
-                        model="whisper-1",
-                        file=audio_file,
-                        response_format="verbose_json"
-                    )
-                    return transcript.text, [{"start": 0, "end": 0, "text": transcript.text}]
+                    progress_callback(0.2, "🔄 Compressing audio file (too large for direct upload)...")
+                
+                try:
+                    import subprocess
+                    compressed_path = audio_path.rsplit('.', 1)[0] + '_compressed.mp3'
+                    
+                    # Compress audio to lower bitrate (64kbps mono should be under 25MB for most files)
+                    cmd = [
+                        'ffmpeg', '-y', '-i', audio_path,
+                        '-ac', '1',  # Mono
+                        '-ar', '16000',  # 16kHz sample rate (good for speech)
+                        '-b:a', '64k',  # 64kbps bitrate
+                        compressed_path
+                    ]
+                    
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                    
+                    if result.returncode == 0 and os.path.exists(compressed_path):
+                        compressed_size_mb = os.path.getsize(compressed_path) / (1024 * 1024)
+                        if progress_callback:
+                            progress_callback(0.3, f"✅ Compressed to {compressed_size_mb:.1f}MB. Transcribing...")
+                        
+                        with open(compressed_path, 'rb') as audio_file:
+                            transcript = client.audio.transcriptions.create(
+                                model="whisper-1",
+                                file=audio_file,
+                                response_format="verbose_json"
+                            )
+                        
+                        # Clean up compressed file
+                        try:
+                            os.remove(compressed_path)
+                        except:
+                            pass
+                        
+                        return transcript.text, [{"start": 0, "end": 0, "text": transcript.text}]
+                    else:
+                        raise Exception(f"FFmpeg compression failed: {result.stderr}")
+                        
+                except subprocess.TimeoutExpired:
+                    raise Exception("Audio compression timed out. File may be too large.")
+                except FileNotFoundError:
+                    raise Exception("FFmpeg not found. Cannot process large audio files.")
+                except Exception as e:
+                    raise Exception(f"Error compressing audio: {str(e)}")
             
             if progress_callback:
                 progress_callback(0.1, "📦 Splitting large audio file into chunks...")
