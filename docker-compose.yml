@@ -6,9 +6,17 @@ services:
     ports:
       - "8501:8501"
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # OpenAI API Key (REQUIRED for Whisper transcription)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Database URL (optional, uses SQLite by default)
       - DATABASE_URL=${DATABASE_URL:-}
       - ENVIRONMENT=production
+      # Email notification settings (optional)
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
     volumes:
       - ./data:/app/data
       - subscription_db:/app/db
