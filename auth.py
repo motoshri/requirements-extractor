@@ -123,22 +123,43 @@ class AuthManager:
             conn.close()
             return {"success": False, "error": "Email already registered"}
         
+        # Check if this is the first user or admin email (auto-approve)
+        cursor.execute("SELECT COUNT(*) FROM users")
+        user_count = cursor.fetchone()[0]
+        
+        # Get admin email from environment or Streamlit secrets
+        admin_email = os.getenv('ADMIN_EMAIL', '').lower()
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and 'ADMIN_EMAIL' in st.secrets:
+                admin_email = st.secrets['ADMIN_EMAIL'].lower()
+        except:
+            pass
+        
+        # Auto-approve if: first user OR email matches admin
+        is_first_user = user_count == 0
+        is_admin_email = admin_email and email.lower() == admin_email
+        auto_approve = is_first_user or is_admin_email
+        
         # Create user
         user_id = hashlib.sha256(f"{email}{datetime.now().isoformat()}{secrets.token_hex(8)}".encode()).hexdigest()[:16]
         password_hash = self.hash_password(password)
+        approval_status = 'approved' if auto_approve else 'pending'
         
         try:
             cursor.execute("""
-                INSERT INTO users (user_id, email, password_hash)
-                VALUES (?, ?, ?)
-            """, (user_id, email.lower(), password_hash))
+                INSERT INTO users (user_id, email, password_hash, approval_status)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, email.lower(), password_hash, approval_status))
             conn.commit()
             conn.close()
             
             return {
                 "success": True,
                 "user_id": user_id,
-                "email": email
+                "email": email,
+                "auto_approved": auto_approve,
+                "approval_status": approval_status
             }
         except Exception as e:
             conn.close()
