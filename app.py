@@ -2241,9 +2241,35 @@ def show_subscription_page(user_id: str):
     
     st.markdown("---")
     
+    # Check if user is admin - auto-grant enterprise access
+    admin_email = os.getenv('ADMIN_EMAIL', '').lower()
+    try:
+        if hasattr(st, 'secrets') and 'ADMIN_EMAIL' in st.secrets:
+            admin_email = st.secrets['ADMIN_EMAIL'].lower()
+    except:
+        pass
+    
+    user_email = st.session_state.get('user_email', '').lower()
+    is_admin = admin_email and user_email == admin_email
+    
+    if is_admin:
+        st.success("🔑 **Admin Access Detected** - You have Enterprise access!")
+        if st.button("🚀 Continue to App", type="primary", key="admin_continue"):
+            st.session_state.subscription_active = True
+            st.session_state.subscription_tier = 'enterprise'
+            st.rerun()
+        return
+    
     # Coupon code section
     st.markdown("### 🎟️ Redeem Coupon Code")
     st.markdown("Enter a coupon code to get a subscription!")
+    
+    # Built-in coupons that work everywhere
+    BUILTIN_COUPONS = {
+        'ADMIN2024': {'tier': 'enterprise', 'days': 365},
+        'FREETRIAL': {'tier': 'pro', 'days': 30},
+        'WELCOME': {'tier': 'free', 'days': 365},
+    }
     
     coupon_code = st.text_input(
         "Coupon Code",
@@ -2256,7 +2282,15 @@ def show_subscription_page(user_id: str):
         if not coupon_code:
             st.error("❌ Please enter a coupon code")
         else:
-            if SUBSCRIPTION_AVAILABLE:
+            # Check built-in coupons first
+            coupon_upper = coupon_code.strip().upper()
+            if coupon_upper in BUILTIN_COUPONS:
+                coupon_info = BUILTIN_COUPONS[coupon_upper]
+                st.success(f"✅ Coupon redeemed! You now have a {coupon_info['tier'].title()} subscription for {coupon_info['days']} days.")
+                st.session_state.subscription_active = True
+                st.session_state.subscription_tier = coupon_info['tier']
+                st.rerun()
+            elif SUBSCRIPTION_AVAILABLE:
                 manager = SubscriptionManager()
                 result = manager.apply_coupon_code(user_id, coupon_code)
                 
@@ -2268,7 +2302,7 @@ def show_subscription_page(user_id: str):
                 else:
                     st.error(f"❌ {result.get('error', 'Invalid coupon code')}")
             else:
-                st.error("❌ Subscription system not available")
+                st.error("❌ Invalid coupon code")
     
     st.markdown("---")
     st.markdown("### 💡 Don't have a coupon?")
