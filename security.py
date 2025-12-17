@@ -34,9 +34,9 @@ class SecurityManager:
         if file_extension not in ALLOWED_EXTENSIONS:
             errors.append(f"File type '{file_extension}' is not allowed. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}")
         
-        # Check file size
+        # Check file size (-1 means unlimited)
         file_size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
-        if file_size_mb > max_size_mb:
+        if max_size_mb > 0 and file_size_mb > max_size_mb:
             errors.append(f"File size ({file_size_mb:.2f} MB) exceeds maximum allowed size ({max_size_mb} MB)")
         
         # Check for suspicious file names
