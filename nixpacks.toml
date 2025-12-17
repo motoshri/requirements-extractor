@@ -1,0 +1,12 @@
+# Nixpacks configuration for Railway
+# Ensures FFmpeg is installed for audio/video processing
+
+[phases.setup]
+nixPkgs = ["python311", "ffmpeg"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"
+
