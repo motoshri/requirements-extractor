@@ -1604,7 +1604,15 @@ def transcribe_audio_with_whisper(audio_path: str, api_key: str = None, use_loca
         else:
             # File is too large, need to chunk it
             if not PYDUB_AVAILABLE:
-                raise ImportError("pydub is required for processing large audio files. Install it with: pip install pydub")
+                # Try to process anyway without chunking (may fail for very large files)
+                if progress_callback:
+                    progress_callback(0.2, "⚠️ Large file - attempting direct processing (pydub not available)...")
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    response_format="verbose_json"
+                )
+                return transcript.text, [{"start": 0, "end": 0, "text": transcript.text}]
             
             if progress_callback:
                 progress_callback(0.1, "📦 Splitting large audio file into chunks...")
