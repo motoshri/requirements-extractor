@@ -193,15 +193,35 @@ class AuthManager:
             conn.close()
             return {"success": False, "error": "Invalid email or password"}
         
+        # Check if this is admin email - auto-approve if pending
+        admin_email = os.getenv('ADMIN_EMAIL', '').lower()
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and 'ADMIN_EMAIL' in st.secrets:
+                admin_email = st.secrets['ADMIN_EMAIL'].lower()
+        except:
+            pass
+        
+        is_admin = admin_email and email.lower() == admin_email
+        
         # Check approval status
         approval_status = approval_status or 'pending'
         if approval_status != 'approved':
-            conn.close()
-            return {
-                "success": False,
-                "error": f"Account is {approval_status}. Please wait for admin approval.",
-                "approval_status": approval_status
-            }
+            # Auto-approve admin users
+            if is_admin:
+                cursor.execute("""
+                    UPDATE users SET approval_status = 'approved', approved_at = CURRENT_TIMESTAMP, approved_by = 'auto_admin'
+                    WHERE user_id = ?
+                """, (user_id,))
+                conn.commit()
+                approval_status = 'approved'
+            else:
+                conn.close()
+                return {
+                    "success": False,
+                    "error": f"Account is {approval_status}. Please wait for admin approval.",
+                    "approval_status": approval_status
+                }
         
         # Update last login
         cursor.execute("""
