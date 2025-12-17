@@ -1,8 +1,12 @@
+# Requirements for local development with local Whisper support
+# Use this instead of requirements.txt if you want local Whisper transcription
+
 openai>=1.0.0
 streamlit>=1.28.0
 pandas>=2.0.0
 moviepy>=1.0.3
 pydub>=0.25.1
+openai-whisper>=20231117
 requests>=2.31.0
 numpy>=1.24.0,<2.0
 imageio-ffmpeg>=0.4.9
