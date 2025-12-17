@@ -234,12 +234,13 @@ class RequirementsExtractor:
                     )
         self.model = model
     
-    def extract_requirements(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def extract_requirements(self, messages: List[Dict[str, Any]], feedback: str = None) -> Dict[str, Any]:
         """
         Extract requirements from transcript messages.
         
         Args:
             messages: List of message dictionaries with speaker and text
+            feedback: Optional feedback or corrections to incorporate into extraction
             
         Returns:
             Dictionary containing extracted requirements
@@ -248,7 +249,7 @@ class RequirementsExtractor:
         conversation = self._format_conversation(messages)
         
         # Create prompt for requirement extraction
-        prompt = self._create_extraction_prompt(conversation)
+        prompt = self._create_extraction_prompt(conversation, feedback)
         
         # Call API (OpenAI or Ollama)
         try:
@@ -256,7 +257,13 @@ class RequirementsExtractor:
                 # Use Ollama local LLM
                 import requests
                 
-                system_prompt = "You are an expert business analyst who extracts requirements from meeting discussions. Extract functional requirements, non-functional requirements, constraints, assumptions, and action items. Return structured JSON."
+                system_prompt = """You are an expert business analyst who extracts requirements from meeting discussions. 
+Extract functional requirements, non-functional requirements, constraints, assumptions, and action items. Return structured JSON.
+
+IMPORTANT: Correct common transcription errors:
+- "Pyo number" or "P.O. number" should be "PO number" (Purchase Order number)
+- "sublatures" or "subletters" should be "suppliers"
+- Always use standard business terminology in extracted requirements."""
                 
                 full_prompt = f"{system_prompt}\n\n{prompt}\n\nIMPORTANT: Return ONLY valid JSON, no other text."
                 
@@ -294,7 +301,7 @@ class RequirementsExtractor:
                     messages=[
                         {
                             "role": "system",
-                            "content": "You are an expert business analyst who extracts requirements from meeting discussions. Extract functional requirements, non-functional requirements, constraints, assumptions, and action items. Return structured JSON."
+                            "content": "You are an expert business analyst who extracts requirements from meeting discussions. Extract functional requirements, non-functional requirements, constraints, assumptions, and action items. Return structured JSON.\n\nIMPORTANT: Correct common transcription errors:\n- \"Pyo number\" or \"P.O. number\" should be \"PO number\" (Purchase Order number)\n- \"sublatures\" or \"subletters\" should be \"suppliers\"\n- Always use standard business terminology in extracted requirements."
                         },
                         {
                             "role": "user",
@@ -313,12 +320,50 @@ class RequirementsExtractor:
         except Exception as e:
             raise Exception(f"Error extracting requirements: {str(e)}")
     
+    def _clean_transcript_text(self, text: str) -> str:
+        """Clean and correct common speech-to-text transcription errors."""
+        if not text:
+            return text
+        
+        # Common business term corrections
+        corrections = {
+            # PO number corrections
+            r'\b(Pyo|PYO|p\.o\.|P\.O\.)\s+number\b': 'PO number',
+            r'\b(Pyo|PYO)\s+Number\b': 'PO Number',
+            r'\b(Pyo|PYO)\b(?=\s*(number|Number))': 'PO',
+            
+            # Supplier corrections
+            r'\bsublatures\b': 'suppliers',
+            r'\bsublature\b': 'supplier',
+            r'\bSublatures\b': 'Suppliers',
+            r'\bSublature\b': 'Supplier',
+            r'\bsubletters\b': 'suppliers',
+            r'\bsubletter\b': 'supplier',
+            
+            # Common abbreviations
+            r'\bS\.O\.W\.\b': 'SOW',
+            r'\bR\.F\.P\.\b': 'RFP',
+            r'\bP\.O\.\b': 'PO',
+            
+            # Common word corrections in business context
+            r'\bforcast\b': 'forecast',
+            r'\bforcasting\b': 'forecasting',
+        }
+        
+        cleaned = text
+        for pattern, replacement in corrections.items():
+            cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
+        
+        return cleaned
+    
     def _format_conversation(self, messages: List[Dict[str, Any]]) -> str:
         """Format messages into a readable conversation."""
         formatted = []
         for msg in messages:
             speaker = msg.get('speaker', 'Unknown')
             text = msg.get('text', '')
+            # Clean transcription errors
+            text = self._clean_transcript_text(text)
             timestamp = msg.get('timestamp', '')
             
             if timestamp:
@@ -328,9 +373,28 @@ class RequirementsExtractor:
         
         return '\n'.join(formatted)
     
-    def _create_extraction_prompt(self, conversation: str) -> str:
+    def _create_extraction_prompt(self, conversation: str, feedback: str = None) -> str:
         """Create prompt for requirement extraction."""
-        return f"""Analyze the following meeting transcript and extract all requirements, decisions, and action items.
+        feedback_section = ""
+        if feedback and feedback.strip():
+            feedback_section = f"""
+
+**USER FEEDBACK AND CORRECTIONS:**
+{feedback}
+
+Please incorporate this feedback into your extraction:
+- Apply any corrections mentioned in the feedback
+- Focus on areas highlighted in the feedback
+- Adjust extraction based on user guidance
+"""
+        
+        return f"""Analyze the following meeting transcript and extract all requirements, decisions, and action items.{feedback_section}
+
+**IMPORTANT: Business Terminology Context**
+- "PO number" or "P.O. number" refers to Purchase Order number
+- "supplier" or "vendor" refers to external suppliers/vendors (NOT "sublatures", "subletters", or similar)
+- Correct any speech-to-text transcription errors in business terms
+- Recognize common business abbreviations: PO (Purchase Order), SOW (Statement of Work), RFP (Request for Proposal), etc.
 
 Meeting Transcript:
 {conversation}
@@ -338,15 +402,21 @@ Meeting Transcript:
 Please extract and structure the following information in JSON format:
 1. **Functional Requirements**: Features, functionalities, and capabilities discussed
 2. **Non-Functional Requirements**: Performance, security, usability, scalability requirements
-3. **Business Rules**: Rules, constraints, and business logic mentioned
+3. **Business Rules**: Rules, constraints, and business logic mentioned (including PO numbers, supplier requirements, etc.)
 4. **Assumptions**: Any assumptions made during the discussion
 5. **Action Items**: Tasks assigned with owners and deadlines if mentioned
 6. **Decisions**: Key decisions made during the meeting
-7. **Stakeholders**: People mentioned and their roles/interests
+7. **Stakeholders**: People mentioned and their roles/interests (including suppliers, vendors, partners)
+
+**Terminology Guidelines:**
+- Always use "PO number" or "Purchase Order number" (never "Pyo number", "P.O.", etc.)
+- Always use "supplier" or "vendor" (never "sublatures", "subletters", etc.)
+- Correct common speech-to-text errors in business terminology
+- Preserve exact numbers, codes, and identifiers mentioned
 
 For each requirement, include:
 - ID (auto-generated)
-- Description
+- Description (with corrected business terminology)
 - Priority (if mentioned: High/Medium/Low)
 - Source speaker
 - Related discussion context
