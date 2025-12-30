@@ -2153,6 +2153,22 @@ def show_signup_page():
                     
                     if result.get("success"):
                         st.success("✅ Account created successfully!")
+                        
+                        # Send email notification to admin
+                        try:
+                            from email_notifications import EmailNotifier
+                            email_notifier = EmailNotifier()
+                            email_notifier.send_new_user_notification(email)
+                            st.info("📧 Admin has been notified. Your account will be reviewed shortly.")
+                        except Exception as e:
+                            # Email notification is optional, don't fail registration
+                            pass
+                        
+                        if result.get('auto_approved'):
+                            st.success("🎉 Your account has been auto-approved! You can sign in now.")
+                        else:
+                            st.info("⏳ Your account is pending approval. You'll receive an email when approved.")
+                        
                         st.info("📧 Please sign in with your email and password")
                         # Switch to sign in
                         st.session_state.show_signin = True
@@ -2358,6 +2374,22 @@ def show_subscription_page(user_id: str):
 def main():
     """Main application."""
     initialize_session_state()
+    
+    # Check for admin panel access (query parameter)
+    admin_mode = st.query_params.get('admin', None)
+    if admin_mode:
+        try:
+            from admin_panel import show_admin_dashboard, require_admin, is_admin_authenticated
+            if is_admin_authenticated():
+                show_admin_dashboard()
+                st.stop()
+            else:
+                from admin_panel import show_admin_login
+                show_admin_login()
+                st.stop()
+        except Exception as e:
+            st.error(f"Admin panel error: {str(e)}")
+            st.stop()
     
     # Check authentication first
     if AUTH_AVAILABLE:
@@ -2794,6 +2826,16 @@ def main():
         }
         </script>
         """, unsafe_allow_html=True)
+        
+        # Language selection
+        st.markdown("### 🌐 Language")
+        language = st.selectbox(
+            "Select Audio Language",
+            options=["Auto-detect", "English", "Hindi", "Kannada", "Spanish", "French", "German", "Chinese", "Japanese"],
+            index=0,
+            help="Select the primary language of your audio/video for better transcription accuracy"
+        )
+        st.session_state.language = language if language != "Auto-detect" else None
         
         # Transcription method selection
         transcription_method = st.radio(
