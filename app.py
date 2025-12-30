@@ -1402,7 +1402,7 @@ exec "{ffmpeg_path}" "$@"
         raise Exception(f"Error transcribing with local Whisper: {error_msg}")
 
 
-def transcribe_audio_with_whisper(audio_path: str, api_key: str = None, use_local: bool = False, progress_callback=None):
+def transcribe_audio_with_whisper(audio_path: str, api_key: str = None, use_local: bool = False, progress_callback=None, language: str = None):
     """Transcribe audio file using OpenAI Whisper API. Handles large files by chunking."""
     try:
         from openai import OpenAI
@@ -1457,11 +1457,14 @@ def transcribe_audio_with_whisper(audio_path: str, api_key: str = None, use_loca
                         audio_file.seek(0)
                         
                         # Make the API call with explicit parameters
-                        transcript = client.audio.transcriptions.create(
-                            model="whisper-1",
-                            file=audio_file,
-                            response_format="text"  # Explicitly request text format
-                        )
+                        params = {
+                            "model": "whisper-1",
+                            "file": audio_file,
+                            "response_format": "text"  # Explicitly request text format
+                        }
+                        if language:
+                            params["language"] = language.lower()
+                        transcript = client.audio.transcriptions.create(**params)
                     except Exception as create_error:
                         error_str = str(create_error)
                         error_type = type(create_error).__name__
@@ -1841,11 +1844,13 @@ def process_audio_file(uploaded_file, api_key: str = None, progress_bar=None, st
         else:
             if not api_key:
                 raise Exception("❌ API key is required when using OpenAI API. Please provide your API key in the sidebar or enable local Whisper transcription.")
+            selected_language = st.session_state.get('language')
             transcript_text, segments = transcribe_audio_with_whisper(
                 tmp_audio_path, 
                 api_key,
                 use_local=False,
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                language=selected_language
             )
         
         update_progress(0.9, "📝 Processing transcript...")
@@ -1938,11 +1943,13 @@ def process_video_file(uploaded_file, api_key: str = None, progress_bar=None, st
         else:
             if not api_key:
                 raise Exception("❌ API key is required when using OpenAI API. Please provide your API key in the sidebar or enable local Whisper transcription.")
+            selected_language = st.session_state.get('language')
             transcript_text, segments = transcribe_audio_with_whisper(
                 tmp_audio_path, 
                 api_key,
                 use_local=False,
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                language=selected_language
             )
         
         update_progress(0.9, "📝 Processing transcript...")
