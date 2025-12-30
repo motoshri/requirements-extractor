@@ -1632,11 +1632,14 @@ def transcribe_audio_with_whisper(audio_path: str, api_key: str = None, use_loca
                             progress_callback(0.3, f"✅ Compressed to {compressed_size_mb:.1f}MB. Transcribing...")
                         
                         with open(compressed_path, 'rb') as audio_file:
-                            transcript = client.audio.transcriptions.create(
-                                model="whisper-1",
-                                file=audio_file,
-                                response_format="verbose_json"
-                            )
+                            params = {
+                                "model": "whisper-1",
+                                "file": audio_file,
+                                "response_format": "verbose_json"
+                            }
+                            if language:
+                                params["language"] = language.lower()
+                            transcript = client.audio.transcriptions.create(**params)
                         
                         # Clean up compressed file
                         try:
