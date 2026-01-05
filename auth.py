@@ -39,6 +39,32 @@ def get_database_url():
         except:
             pass
     
+    # Validate and fix URL if needed
+    if db_url and '@' in db_url:
+        # Check if password might have @ symbol (malformed URL)
+        # Format should be: postgresql://user:password@host:port/db
+        # If we see multiple @, the password likely contains @
+        parts = db_url.split('@')
+        if len(parts) > 2:
+            # Password contains @, need to URL-encode it
+            import urllib.parse
+            # Reconstruct: everything before last @ is user:password, rest is host
+            user_pass = '@'.join(parts[:-1])
+            host_db = parts[-1]
+            
+            # Split user:password
+            if '://' in user_pass:
+                protocol_user = user_pass.split('://')
+                if len(protocol_user) == 2:
+                    protocol = protocol_user[0]
+                    user_pass_part = protocol_user[1]
+                    if ':' in user_pass_part:
+                        user, password = user_pass_part.split(':', 1)
+                        # URL-encode the password
+                        password_encoded = urllib.parse.quote(password, safe='')
+                        # Reconstruct URL
+                        db_url = f"{protocol}://{user}:{password_encoded}@{host_db}"
+    
     return db_url
 
 
