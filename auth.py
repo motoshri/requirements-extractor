@@ -82,7 +82,7 @@ class AuthManager:
         if self.use_postgres:
             return psycopg2.connect(self.database_url)
         else:
-            return self._get_connection()
+            return sqlite3.connect(str(self.db_path))
     
     def _get_placeholder(self):
         """Get parameter placeholder for SQL queries."""
